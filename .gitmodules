@@ -1,0 +1,3 @@
+[submodule "src/main/resources/vsrc/SuperScalar-RISCV-CPU"]
+	path = src/main/resources/vsrc/SuperScalar-RISCV-CPU
+	url = https://github.com/chiro2001/SuperScalar-RISCV-CPU
