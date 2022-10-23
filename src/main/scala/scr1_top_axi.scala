@@ -12,8 +12,11 @@
 package ssrv
 
 import chisel3._
+import chisel3.experimental.{ChiselAnnotation, RunFirrtlTransform}
 import chisel3.util._
+import firrtl.transforms.{BlackBoxPathAnno, BlackBoxSourceHelper}
 
+import scala.reflect.io.File
 import scala.sys.process._
 
 trait SSRVCoreIOIMem extends Bundle {
@@ -132,7 +135,7 @@ trait SSRVCoreIOIRQWithoutIPIC extends Bundle {
 
 trait SSRVCoreIOIRQ
   extends Bundle
-  with SSRVCoreIOIRQWithIPIC {
+    with SSRVCoreIOIRQWithIPIC {
   val soft_irq = Input(Bool()) // Software IRQ input
 }
 
@@ -159,9 +162,10 @@ class SSRVCoreIO extends Bundle
   with SSRVCoreIOIMem
   with SSRVCoreIODMem
 
-class SSRVCoreBlackbox
+class scr1_top_axi
   extends BlackBox
-    with HasBlackBoxResource {
+    // with HasBlackBoxResource
+    with HasBlackBoxDir {
   val io = IO(new SSRVCoreIO)
 
   val chipyardDir = System.getProperty("user.dir")
@@ -173,5 +177,29 @@ class SSRVCoreBlackbox
 
   // add wrapper/blackbox after it is pre-processed
   // addPath(s"$ssrvVsrcDir/SSRVCoreBlackbox.preprocessed.sv")
-  addResource(s"$ssrvVsrcDir/ssrv")
+  // addResource(s"$ssrvVsrcDir/ssrv")
+  addDir(s"$ssrvVsrcDir/ssrv")
+  // File(s"$ssrvVsrcDir/ssrv").toDirectory.deepFiles.foreach(f => {
+  //   println(s"file: ${f.path}")
+  // })
+}
+
+trait HasBlackBoxDir extends BlackBox {
+  self: BlackBox =>
+
+  /** Copies files to the target directory
+   *
+   * This works with absolute and relative paths. Relative paths are relative
+   * to the current working directory, which is generally not the same as the
+   * target directory.
+   */
+  def addDir(blackBoxPath: String): Unit = {
+    File(blackBoxPath).toDirectory.deepFiles.foreach(f => {
+      chisel3.experimental.annotate(new ChiselAnnotation with RunFirrtlTransform {
+        def toFirrtl = BlackBoxPathAnno(self.toNamed, f.path)
+
+        def transformClass = classOf[BlackBoxSourceHelper]
+      })
+    })
+  }
 }

@@ -165,13 +165,31 @@ class SSRVTile private(
   val beatBytes = masterPortBeatBytes
   val sourceBits = 1 // equiv. to userBits (i think)
 
-  val memAXI4Node = AXI4MasterNode(
-    Seq(AXI4MasterPortParameters(
+  // val memAXI4Nodes = AXI4MasterNode(
+  //   Seq(
+  //     AXI4MasterPortParameters(
+  //     masters = Seq(AXI4MasterParameters(
+  //       name = portName + "-imem",
+  //       id = IdRange(0, 1 << idBits)))),
+  //     AXI4MasterPortParameters(
+  //       masters = Seq(AXI4MasterParameters(
+  //         name = portName + "-dmem",
+  //         id = IdRange(0, 1 << idBits))))
+  //   ))
+
+  val memAXI4Nodes = Seq(
+    AXI4MasterNode(Seq(AXI4MasterPortParameters(
       masters = Seq(AXI4MasterParameters(
-        name = portName,
+        name = portName + "-imem",
+        id = IdRange(0, 1 << idBits)))))),
+    AXI4MasterNode(Seq(AXI4MasterPortParameters(
+      masters = Seq(AXI4MasterParameters(
+        name = portName + "-dmem",
         id = IdRange(0, 1 << idBits))))))
+  )
 
   val memoryTap = TLIdentityNode()
+  val xbar = AXI4Xbar()
   (tlMasterXbar.node
     := memoryTap
     := TLBuffer()
@@ -180,7 +198,11 @@ class SSRVTile private(
     := AXI4ToTL() // convert to TL
     := AXI4UserYanker(Some(2)) // remove user field on AXI interface. need but in reality user intf. not needed
     := AXI4Fragmenter() // deal with multi-beat xacts
-    := memAXI4Node)
+    := xbar
+    // := memAXI4Nodes
+    )
+  xbar := memAXI4Nodes.head
+  xbar := memAXI4Nodes(1)
 
   def connectSSRVInterrupts(irq_line: UInt, soft_irq: Bool) {
     val (interrupts, _) = intSinkNode.in(0)
@@ -228,7 +250,7 @@ class SSRVTileModuleImp(outer: SSRVTile) extends BaseTileModuleImp(outer) {
   val traceInstSz = (new freechips.rocketchip.rocket.TracedInstruction).getWidth + 2
 
   // connect the ssrv core
-  val core = Module(new SSRVCoreBlackbox).suggestName("ssrv_core_inst")
+  val core = Module(new scr1_top_axi).suggestName("ssrv_core_inst")
 
   core.io.clk := clock
   core.io.rtc_clk := clock
@@ -263,8 +285,9 @@ class SSRVTileModuleImp(outer: SSRVTile) extends BaseTileModuleImp(outer) {
   }
 
   // connect the axi interface
-  require(outer.memAXI4Node.out.size == 2, "This core requires imem and dmem AXI ports!")
-  outer.memAXI4Node.out.head match {
+  // require(outer.memAXI4Nodes.out.size == 2, "This core requires imem and dmem AXI ports!")
+  require(outer.memAXI4Nodes.size == 2, "This core requires imem and dmem AXI ports!")
+  outer.memAXI4Nodes.head.out.head match {
     case (out, edgeOut) =>
       core.io.io_axi_imem_awready := out.aw.ready
       out.aw.valid := core.io.io_axi_imem_awvalid
@@ -318,7 +341,7 @@ class SSRVTileModuleImp(outer: SSRVTile) extends BaseTileModuleImp(outer) {
       core.io.io_axi_imem_rlast := out.r.bits.last
       core.io.io_axi_imem_ruser := 0.U // unused
   }
-  outer.memAXI4Node.out.last match {
+  outer.memAXI4Nodes.head.out.head match {
     case (out, edgeOut) =>
       core.io.io_axi_dmem_awready := out.aw.ready
       out.aw.valid := core.io.io_axi_dmem_awvalid
