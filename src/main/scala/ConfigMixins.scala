@@ -20,32 +20,32 @@ import freechips.rocketchip.tile._
  * Speeds up operation... at the expense of not being able to use
  * to/fromhost communication unless those lines are evicted from L1.
  */
-class WithToFromHostCaching extends Config((site, here, up) => {
-  case TilesLocated(InSubsystem) => up(TilesLocated(InSubsystem), site) map {
-    case tp: PicoRVTileAttachParams => tp.copy(tileParams = tp.tileParams.copy(core = tp.tileParams.core.copy(
-      enableToFromHostCaching = true
-    )))
-  }
-})
+// class WithToFromHostCaching extends Config((site, here, up) => {
+//   case TilesLocated(InSubsystem) => up(TilesLocated(InSubsystem), site) map {
+//     case tp: SSRVTileAttachParams => tp.copy(tileParams = tp.tileParams.copy(core = tp.tileParams.core.copy(
+//       enableToFromHostCaching = true
+//     )))
+//   }
+// })
 
 /**
- * Create multiple copies of a PicoRV tile (and thus a core).
+ * Create multiple copies of a SSRV tile (and thus a core).
  * Override with the default mixins to control all params of the tiles.
  *
  * @param n amount of tiles to duplicate
  */
-class WithNPicoRVCores(n: Int = 1, overrideIdOffset: Option[Int] = None) extends Config((site, here, up) => {
+class WithNSSRVCores(n: Int = 1, overrideIdOffset: Option[Int] = None) extends Config((site, here, up) => {
   case TilesLocated(InSubsystem) => {
     val prev = up(TilesLocated(InSubsystem), site)
     val idOffset = overrideIdOffset.getOrElse(prev.size)
     (0 until n).map { i =>
-      PicoRVTileAttachParams(
-        tileParams = PicoRVTileParams(hartId = i + idOffset),
+      SSRVTileAttachParams(
+        tileParams = SSRVTileParams(hartId = i + idOffset),
         crossingParams = RocketCrossingParams()
       )
     } ++ prev
   }
   case SystemBusKey => up(SystemBusKey, site).copy(beatBytes = 8)
-  case XLen => 64
+  case XLen => 32
 })
 

@@ -5,7 +5,7 @@
 
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
-// CVA6 Tile Wrapper
+// SSRV Tile Wrapper
 //------------------------------------------------------------------------------
 //------------------------------------------------------------------------------
 
@@ -31,14 +31,9 @@ import freechips.rocketchip.tile._
 import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.prci.ClockSinkParameters
 
-case class CVA6CoreParams(
-  bootFreqHz: BigInt = BigInt(1700000000),
-  rasEntries: Int = 4,
-  btbEntries: Int = 16,
-  bhtEntries: Int = 16,
-  pmpEntries: Int = 4,
-  enableToFromHostCaching: Boolean = false,
-) extends CoreParams {
+case class SSRVCoreParams
+(bootFreqHz: BigInt = BigInt(1700000000))
+  extends CoreParams {
   /* DO NOT CHANGE BELOW THIS */
   val useVM: Boolean = true
   val useHypervisor: Boolean = false
@@ -78,22 +73,21 @@ case class CVA6CoreParams(
   val nPTECacheEntries: Int = 8 // TODO: Check
 }
 
-case class CVA6TileAttachParams(
-  tileParams: CVA6TileParams,
-  crossingParams: RocketCrossingParams
-) extends CanAttachTile {
-  type TileType = CVA6Tile
+case class SSRVTileAttachParams(
+                                 tileParams: SSRVTileParams,
+                                 crossingParams: RocketCrossingParams
+                               ) extends CanAttachTile {
+  type TileType = SSRVTile
   val lookup = PriorityMuxHartIdFromSeq(Seq(tileParams))
 }
 
-// TODO: BTBParams, DCacheParams, ICacheParams are incorrect in DTB... figure out defaults in CVA6 and put in DTB
-case class CVA6TileParams(
-  name: Option[String] = Some("cva6_tile"),
-  hartId: Int = 0,
-  trace: Boolean = false,
-  val core: CVA6CoreParams = CVA6CoreParams()
-) extends InstantiableTileParams[CVA6Tile]
-{
+// TODO: BTBParams, DCacheParams, ICacheParams are incorrect in DTB... figure out defaults in SSRV and put in DTB
+case class SSRVTileParams(
+                           name: Option[String] = Some("ssrv_tile"),
+                           hartId: Int = 0,
+                           trace: Boolean = false,
+                           val core: SSRVCoreParams = SSRVCoreParams()
+                         ) extends InstantiableTileParams[SSRVTile] {
   val beuAddr: Option[BigInt] = None
   val blockerCtrlAddr: Option[BigInt] = None
   val btb: Option[BTBParams] = Some(BTBParams())
@@ -101,25 +95,25 @@ case class CVA6TileParams(
   val dcache: Option[DCacheParams] = Some(DCacheParams())
   val icache: Option[ICacheParams] = Some(ICacheParams())
   val clockSinkParams: ClockSinkParameters = ClockSinkParameters()
-  def instantiate(crossing: TileCrossingParamsLike, lookup: LookupByHartIdImpl)(implicit p: Parameters): CVA6Tile = {
-    new CVA6Tile(this, crossing, lookup)
+
+  def instantiate(crossing: TileCrossingParamsLike, lookup: LookupByHartIdImpl)(implicit p: Parameters): SSRVTile = {
+    new SSRVTile(this, crossing, lookup)
   }
 }
 
-class CVA6Tile private(
-  val cva6Params: CVA6TileParams,
-  crossing: ClockCrossingType,
-  lookup: LookupByHartIdImpl,
-  q: Parameters)
-  extends BaseTile(cva6Params, crossing, lookup, q)
-  with SinksExternalInterrupts
-  with SourcesExternalNotifications
-{
+class SSRVTile private(
+                        val ssrvParams: SSRVTileParams,
+                        crossing: ClockCrossingType,
+                        lookup: LookupByHartIdImpl,
+                        q: Parameters)
+  extends BaseTile(ssrvParams, crossing, lookup, q)
+    with SinksExternalInterrupts
+    with SourcesExternalNotifications {
   /**
    * Setup parameters:
    * Private constructor ensures altered LazyModule.p is used implicitly
    */
-  def this(params: CVA6TileParams, crossing: TileCrossingParamsLike, lookup: LookupByHartIdImpl)(implicit p: Parameters) =
+  def this(params: SSRVTileParams, crossing: TileCrossingParamsLike, lookup: LookupByHartIdImpl)(implicit p: Parameters) =
     this(params, crossing.crossingType, lookup, p)
 
   val intOutwardNode = IntIdentityNode()
@@ -130,14 +124,15 @@ class CVA6Tile private(
   masterNode :=* tlOtherMastersNode
   DisableMonitors { implicit p => tlSlaveXbar.node :*= slaveNode }
 
-  val cpuDevice: SimpleDevice = new SimpleDevice("cpu", Seq("openhwgroup,cva6", "riscv")) {
+  val cpuDevice: SimpleDevice = new SimpleDevice("cpu", Seq("openhwgroup,ssrv", "riscv")) {
     override def parent = Some(ResourceAnchors.cpus)
+
     override def describe(resources: ResourceBindings): Description = {
       val Description(name, mapping) = super.describe(resources)
       Description(name, mapping ++
-                        cpuProperties ++
-                        nextLevelCacheProperty ++
-                        tileProperties)
+        cpuProperties ++
+        nextLevelCacheProperty ++
+        tileProperties)
     }
   }
 
@@ -145,27 +140,27 @@ class CVA6Tile private(
     Resource(cpuDevice, "reg").bind(ResourceAddress(staticIdForMetadataUseOnly))
   }
 
- override def makeMasterBoundaryBuffers(crossing: ClockCrossingType)(implicit p: Parameters) = crossing match {
+  override def makeMasterBoundaryBuffers(crossing: ClockCrossingType)(implicit p: Parameters) = crossing match {
     case _: RationalCrossing =>
-      if (!cva6Params.boundaryBuffers) TLBuffer(BufferParams.none)
+      if (!ssrvParams.boundaryBuffers) TLBuffer(BufferParams.none)
       else TLBuffer(BufferParams.none, BufferParams.flow, BufferParams.none, BufferParams.flow, BufferParams(1))
     case _ => TLBuffer(BufferParams.none)
   }
 
   override def makeSlaveBoundaryBuffers(crossing: ClockCrossingType)(implicit p: Parameters) = crossing match {
     case _: RationalCrossing =>
-      if (!cva6Params.boundaryBuffers) TLBuffer(BufferParams.none)
+      if (!ssrvParams.boundaryBuffers) TLBuffer(BufferParams.none)
       else TLBuffer(BufferParams.flow, BufferParams.none, BufferParams.none, BufferParams.none, BufferParams.none)
     case _ => TLBuffer(BufferParams.none)
   }
 
-  override lazy val module = new CVA6TileModuleImp(this)
+  override lazy val module = new SSRVTileModuleImp(this)
 
   /**
    * Setup AXI4 memory interface.
    * THESE ARE CONSTANTS.
    */
-  val portName = "cva6-mem-port-axi4"
+  val portName = "ssrv-mem-port-axi4"
   val idBits = 4
   val beatBytes = masterPortBeatBytes
   val sourceBits = 1 // equiv. to userBits (i think)
@@ -187,18 +182,20 @@ class CVA6Tile private(
     := AXI4Fragmenter() // deal with multi-beat xacts
     := memAXI4Node)
 
-  def connectCVA6Interrupts(debug: Bool, msip: Bool, mtip: Bool, m_s_eip: UInt) {
+  def connectSSRVInterrupts(irq_line: UInt, soft_irq: Bool) {
     val (interrupts, _) = intSinkNode.in(0)
-    debug := interrupts(0)
-    msip := interrupts(1)
-    mtip := interrupts(2)
-    m_s_eip := Cat(interrupts(4), interrupts(3))
+    // debug := interrupts(0)
+    // msip := interrupts(1)
+    // mtip := interrupts(2)
+    // m_s_eip := Cat(interrupts(4), interrupts(3))
+    irq_line := (interrupts.asUInt >> 1.U).asUInt
+    soft_irq := interrupts.head
   }
 }
 
-class CVA6TileModuleImp(outer: CVA6Tile) extends BaseTileModuleImp(outer){
+class SSRVTileModuleImp(outer: SSRVTile) extends BaseTileModuleImp(outer) {
   // annotate the parameters
-  Annotated.params(this, outer.cva6Params)
+  Annotated.params(this, outer.ssrvParams)
 
   val debugBaseAddr = BigInt(0x0) // CONSTANT: based on default debug module
   val debugSz = BigInt(0x1000) // CONSTANT: based on default debug module
@@ -207,133 +204,172 @@ class CVA6TileModuleImp(outer: CVA6Tile) extends BaseTileModuleImp(outer){
 
   // have the main memory, bootrom, debug regions be executable
   val bootromParams = p(BootROMLocated(InSubsystem)).get
-  val executeRegionBases = Seq(p(ExtMem).get.master.base,      bootromParams.address, debugBaseAddr, BigInt(0x0), BigInt(0x0))
-  val executeRegionSzs   = Seq(p(ExtMem).get.master.size, BigInt(bootromParams.size),       debugSz, BigInt(0x0), BigInt(0x0))
-  val executeRegionCnt   = executeRegionBases.length
+  val executeRegionBases = Seq(p(ExtMem).get.master.base, bootromParams.address, debugBaseAddr, BigInt(0x0), BigInt(0x0))
+  val executeRegionSzs = Seq(p(ExtMem).get.master.size, BigInt(bootromParams.size), debugSz, BigInt(0x0), BigInt(0x0))
+  val executeRegionCnt = executeRegionBases.length
 
   // have the main memory be cached, but don't cache tohost/fromhost addresses
   // TODO: current cache subsystem can only support 1 cacheable region... so cache AFTER the tohost/fromhost addresses
   val wordOffset = 0x40
-  val (cacheableRegionBases, cacheableRegionSzs) = if (outer.cva6Params.core.enableToFromHostCaching) {
+  val (cacheableRegionBases, cacheableRegionSzs) = if (true /* outer.ssrvParams.core.enableToFromHostCaching */ ) {
     val bases = Seq(p(ExtMem).get.master.base, BigInt(0x0), BigInt(0x0), BigInt(0x0), BigInt(0x0))
-    val sizes   = Seq(p(ExtMem).get.master.size, BigInt(0x0), BigInt(0x0), BigInt(0x0), BigInt(0x0))
+    val sizes = Seq(p(ExtMem).get.master.size, BigInt(0x0), BigInt(0x0), BigInt(0x0), BigInt(0x0))
     (bases, sizes)
   } else {
-    val bases = Seq(                                                          fromhostAddr + 0x40,              p(ExtMem).get.master.base, BigInt(0x0), BigInt(0x0), BigInt(0x0))
+    val bases = Seq(fromhostAddr + 0x40, p(ExtMem).get.master.base, BigInt(0x0), BigInt(0x0), BigInt(0x0))
     val sizes = Seq(p(ExtMem).get.master.size - (fromhostAddr + 0x40 - p(ExtMem).get.master.base), tohostAddr - p(ExtMem).get.master.base, BigInt(0x0), BigInt(0x0), BigInt(0x0))
     (bases, sizes)
   }
-  val cacheableRegionCnt   = cacheableRegionBases.length
+  val cacheableRegionCnt = cacheableRegionBases.length
 
   // Add 2 to account for the extra clock and reset included with each
   // instruction in the original trace port implementation. These have since
   // been removed from TracedInstruction.
   val traceInstSz = (new freechips.rocketchip.rocket.TracedInstruction).getWidth + 2
 
-  // connect the cva6 core
-  val core = Module(new CVA6CoreBlackbox(
-    // traceport params
-    traceportEnabled = outer.cva6Params.trace,
-    traceportSz = (outer.cva6Params.core.retireWidth * traceInstSz),
+  // connect the ssrv core
+  val core = Module(new SSRVCoreBlackbox).suggestName("ssrv_core_inst")
 
-    // general core params
-    xLen = p(XLen),
-    rasEntries = outer.cva6Params.core.rasEntries,
-    btbEntries = outer.cva6Params.core.btbEntries,
-    bhtEntries = outer.cva6Params.core.bhtEntries,
-    exeRegCnt = executeRegionCnt,
-    exeRegBase = executeRegionBases,
-    exeRegSz = executeRegionSzs,
-    cacheRegCnt = cacheableRegionCnt,
-    cacheRegBase = cacheableRegionBases,
-    cacheRegSz = cacheableRegionSzs,
-    debugBase = debugBaseAddr,
-    axiAddrWidth = 64, // CONSTANT: addr width for TL can differ
-    axiDataWidth = outer.beatBytes * 8,
-    axiUserWidth = outer.sourceBits,
-    axiIdWidth = outer.idBits,
-    pmpEntries = outer.cva6Params.core.pmpEntries
-  ))
+  core.io.clk := clock
+  core.io.rtc_clk := clock
+  core.io.rst_n := ~reset.asBool
+  core.io.cpu_rst_n := ~reset.asBool
+  core.io.pwrup_rst_n := ~reset.asBool
+  core.io.test_mode := false.B
+  core.io.test_rst_n := ~reset.asBool
+  // core.io.boot_addr_i := outer.resetVectorSinkNode.bundle
+  core.io.fuse_mhartid := outer.hartIdSinkNode.bundle
 
-  core.io.clk_i := clock
-  core.io.rst_ni := ~reset.asBool
-  core.io.boot_addr_i := outer.resetVectorSinkNode.bundle
-  core.io.hart_id_i := outer.hartIdSinkNode.bundle
+  outer.connectSSRVInterrupts(core.io.irq_lines, core.io.soft_irq)
 
-  outer.connectCVA6Interrupts(core.io.debug_req_i, core.io.ipi_i, core.io.time_irq_i, core.io.irq_i)
-
-  if (outer.cva6Params.trace) {
+  if (outer.ssrvParams.trace) {
     // unpack the trace io from a UInt into Vec(TracedInstructions)
     //outer.traceSourceNode.bundle <> core.io.trace_o.asTypeOf(outer.traceSourceNode.bundle)
 
-    for (w <- 0 until outer.cva6Params.core.retireWidth) {
-      outer.traceSourceNode.bundle(w).valid     := core.io.trace_o(traceInstSz*w + 2)
-      outer.traceSourceNode.bundle(w).iaddr     := core.io.trace_o(traceInstSz*w + 42, traceInstSz*w + 3)
-      outer.traceSourceNode.bundle(w).insn      := core.io.trace_o(traceInstSz*w + 74, traceInstSz*w + 43)
-      outer.traceSourceNode.bundle(w).priv      := core.io.trace_o(traceInstSz*w + 77, traceInstSz*w + 75)
-      outer.traceSourceNode.bundle(w).exception := core.io.trace_o(traceInstSz*w + 78)
-      outer.traceSourceNode.bundle(w).interrupt := core.io.trace_o(traceInstSz*w + 79)
-      outer.traceSourceNode.bundle(w).cause     := core.io.trace_o(traceInstSz*w + 87, traceInstSz*w + 80)
-      outer.traceSourceNode.bundle(w).tval      := core.io.trace_o(traceInstSz*w + 127, traceInstSz*w + 88)
-    }
+    // TODO: add tracer
+    // for (w <- 0 until outer.ssrvParams.core.retireWidth) {
+    //   outer.traceSourceNode.bundle(w).valid := core.io.trace_o(traceInstSz * w + 2)
+    //   outer.traceSourceNode.bundle(w).iaddr := core.io.trace_o(traceInstSz * w + 42, traceInstSz * w + 3)
+    //   outer.traceSourceNode.bundle(w).insn := core.io.trace_o(traceInstSz * w + 74, traceInstSz * w + 43)
+    //   outer.traceSourceNode.bundle(w).priv := core.io.trace_o(traceInstSz * w + 77, traceInstSz * w + 75)
+    //   outer.traceSourceNode.bundle(w).exception := core.io.trace_o(traceInstSz * w + 78)
+    //   outer.traceSourceNode.bundle(w).interrupt := core.io.trace_o(traceInstSz * w + 79)
+    //   outer.traceSourceNode.bundle(w).cause := core.io.trace_o(traceInstSz * w + 87, traceInstSz * w + 80)
+    //   outer.traceSourceNode.bundle(w).tval := core.io.trace_o(traceInstSz * w + 127, traceInstSz * w + 88)
+    // }
   } else {
     outer.traceSourceNode.bundle := DontCare
     outer.traceSourceNode.bundle map (t => t.valid := false.B)
   }
 
   // connect the axi interface
-  outer.memAXI4Node.out foreach { case (out, edgeOut) =>
-    core.io.axi_resp_i_aw_ready    := out.aw.ready
-    out.aw.valid                   := core.io.axi_req_o_aw_valid
-    out.aw.bits.id                 := core.io.axi_req_o_aw_bits_id
-    out.aw.bits.addr               := core.io.axi_req_o_aw_bits_addr
-    out.aw.bits.len                := core.io.axi_req_o_aw_bits_len
-    out.aw.bits.size               := core.io.axi_req_o_aw_bits_size
-    out.aw.bits.burst              := core.io.axi_req_o_aw_bits_burst
-    out.aw.bits.lock               := core.io.axi_req_o_aw_bits_lock
-    out.aw.bits.cache              := core.io.axi_req_o_aw_bits_cache
-    out.aw.bits.prot               := core.io.axi_req_o_aw_bits_prot
-    out.aw.bits.qos                := core.io.axi_req_o_aw_bits_qos
-    // unused signals
-    assert(core.io.axi_req_o_aw_bits_region === 0.U)
-    assert(core.io.axi_req_o_aw_bits_atop === 0.U)
-    assert(core.io.axi_req_o_aw_bits_user === 0.U)
+  require(outer.memAXI4Node.out.size == 2, "This core requires imem and dmem AXI ports!")
+  outer.memAXI4Node.out.head match {
+    case (out, edgeOut) =>
+      core.io.io_axi_imem_awready := out.aw.ready
+      out.aw.valid := core.io.io_axi_imem_awvalid
+      out.aw.bits.id := core.io.io_axi_imem_awid
+      out.aw.bits.addr := core.io.io_axi_imem_awaddr
+      out.aw.bits.len := core.io.io_axi_imem_awlen
+      out.aw.bits.size := core.io.io_axi_imem_awsize
+      out.aw.bits.burst := core.io.io_axi_imem_awburst
+      out.aw.bits.lock := core.io.io_axi_imem_awlock
+      out.aw.bits.cache := core.io.io_axi_imem_awcache
+      out.aw.bits.prot := core.io.io_axi_imem_awprot
+      out.aw.bits.qos := core.io.io_axi_imem_awqos
+      // unused signals
+      assert(core.io.io_axi_imem_awregion === 0.U)
+      assert(core.io.io_axi_imem_awuser === 0.U)
 
-    core.io.axi_resp_i_w_ready     := out.w.ready
-    out.w.valid                    := core.io.axi_req_o_w_valid
-    out.w.bits.data                := core.io.axi_req_o_w_bits_data
-    out.w.bits.strb                := core.io.axi_req_o_w_bits_strb
-    out.w.bits.last                := core.io.axi_req_o_w_bits_last
-    // unused signals
-    assert(core.io.axi_req_o_w_bits_user === 0.U)
+      core.io.io_axi_imem_wready := out.w.ready
+      out.w.valid := core.io.io_axi_imem_wvalid
+      out.w.bits.data := core.io.io_axi_imem_wdata
+      out.w.bits.strb := core.io.io_axi_imem_wstrb
+      out.w.bits.last := core.io.io_axi_imem_wlast
+      // unused signals
+      assert(core.io.io_axi_imem_wuser === 0.U)
 
-    out.b.ready                    := core.io.axi_req_o_b_ready
-    core.io.axi_resp_i_b_valid     := out.b.valid
-    core.io.axi_resp_i_b_bits_id   := out.b.bits.id
-    core.io.axi_resp_i_b_bits_resp := out.b.bits.resp
-    core.io.axi_resp_i_b_bits_user := 0.U // unused
+      out.b.ready := core.io.io_axi_imem_bready
+      core.io.io_axi_imem_bvalid := out.b.valid
+      core.io.io_axi_imem_bid := out.b.bits.id
+      core.io.io_axi_imem_bresp := out.b.bits.resp
+      core.io.io_axi_imem_buser := 0.U // unused
 
-    core.io.axi_resp_i_ar_ready    := out.ar.ready
-    out.ar.valid                   := core.io.axi_req_o_ar_valid
-    out.ar.bits.id                 := core.io.axi_req_o_ar_bits_id
-    out.ar.bits.addr               := core.io.axi_req_o_ar_bits_addr
-    out.ar.bits.len                := core.io.axi_req_o_ar_bits_len
-    out.ar.bits.size               := core.io.axi_req_o_ar_bits_size
-    out.ar.bits.burst              := core.io.axi_req_o_ar_bits_burst
-    out.ar.bits.lock               := core.io.axi_req_o_ar_bits_lock
-    out.ar.bits.cache              := core.io.axi_req_o_ar_bits_cache
-    out.ar.bits.prot               := core.io.axi_req_o_ar_bits_prot
-    out.ar.bits.qos                := core.io.axi_req_o_ar_bits_qos
-    // unused signals
-    assert(core.io.axi_req_o_ar_bits_region === 0.U)
-    assert(core.io.axi_req_o_ar_bits_user === 0.U)
+      core.io.io_axi_imem_arready := out.ar.ready
+      out.ar.valid := core.io.io_axi_imem_arvalid
+      out.ar.bits.id := core.io.io_axi_imem_arid
+      out.ar.bits.addr := core.io.io_axi_imem_araddr
+      out.ar.bits.len := core.io.io_axi_imem_arlen
+      out.ar.bits.size := core.io.io_axi_imem_arsize
+      out.ar.bits.burst := core.io.io_axi_imem_arburst
+      out.ar.bits.lock := core.io.io_axi_imem_arlock
+      out.ar.bits.cache := core.io.io_axi_imem_arcache
+      out.ar.bits.prot := core.io.io_axi_imem_arprot
+      out.ar.bits.qos := core.io.io_axi_imem_arqos
+      // unused signals
+      assert(core.io.io_axi_imem_arregion === 0.U)
+      assert(core.io.io_axi_imem_aruser === 0.U)
 
-    out.r.ready                    := core.io.axi_req_o_r_ready
-    core.io.axi_resp_i_r_valid     := out.r.valid
-    core.io.axi_resp_i_r_bits_id   := out.r.bits.id
-    core.io.axi_resp_i_r_bits_data := out.r.bits.data
-    core.io.axi_resp_i_r_bits_resp := out.r.bits.resp
-    core.io.axi_resp_i_r_bits_last := out.r.bits.last
-    core.io.axi_resp_i_r_bits_user := 0.U // unused
+      out.r.ready := core.io.io_axi_imem_rready
+      core.io.io_axi_imem_rvalid := out.r.valid
+      core.io.io_axi_imem_rid := out.r.bits.id
+      core.io.io_axi_imem_rdata := out.r.bits.data
+      core.io.io_axi_imem_rresp := out.r.bits.resp
+      core.io.io_axi_imem_rlast := out.r.bits.last
+      core.io.io_axi_imem_ruser := 0.U // unused
+  }
+  outer.memAXI4Node.out.last match {
+    case (out, edgeOut) =>
+      core.io.io_axi_dmem_awready := out.aw.ready
+      out.aw.valid := core.io.io_axi_dmem_awvalid
+      out.aw.bits.id := core.io.io_axi_dmem_awid
+      out.aw.bits.addr := core.io.io_axi_dmem_awaddr
+      out.aw.bits.len := core.io.io_axi_dmem_awlen
+      out.aw.bits.size := core.io.io_axi_dmem_awsize
+      out.aw.bits.burst := core.io.io_axi_dmem_awburst
+      out.aw.bits.lock := core.io.io_axi_dmem_awlock
+      out.aw.bits.cache := core.io.io_axi_dmem_awcache
+      out.aw.bits.prot := core.io.io_axi_dmem_awprot
+      out.aw.bits.qos := core.io.io_axi_dmem_awqos
+      // unused signals
+      assert(core.io.io_axi_dmem_awregion === 0.U)
+      assert(core.io.io_axi_dmem_awuser === 0.U)
+
+      core.io.io_axi_dmem_wready := out.w.ready
+      out.w.valid := core.io.io_axi_dmem_wvalid
+      out.w.bits.data := core.io.io_axi_dmem_wdata
+      out.w.bits.strb := core.io.io_axi_dmem_wstrb
+      out.w.bits.last := core.io.io_axi_dmem_wlast
+      // unused signals
+      assert(core.io.io_axi_dmem_wuser === 0.U)
+
+      out.b.ready := core.io.io_axi_dmem_bready
+      core.io.io_axi_dmem_bvalid := out.b.valid
+      core.io.io_axi_dmem_bid := out.b.bits.id
+      core.io.io_axi_dmem_bresp := out.b.bits.resp
+      core.io.io_axi_dmem_buser := 0.U // unused
+
+      core.io.io_axi_dmem_arready := out.ar.ready
+      out.ar.valid := core.io.io_axi_dmem_arvalid
+      out.ar.bits.id := core.io.io_axi_dmem_arid
+      out.ar.bits.addr := core.io.io_axi_dmem_araddr
+      out.ar.bits.len := core.io.io_axi_dmem_arlen
+      out.ar.bits.size := core.io.io_axi_dmem_arsize
+      out.ar.bits.burst := core.io.io_axi_dmem_arburst
+      out.ar.bits.lock := core.io.io_axi_dmem_arlock
+      out.ar.bits.cache := core.io.io_axi_dmem_arcache
+      out.ar.bits.prot := core.io.io_axi_dmem_arprot
+      out.ar.bits.qos := core.io.io_axi_dmem_arqos
+      // unused signals
+      assert(core.io.io_axi_dmem_arregion === 0.U)
+      assert(core.io.io_axi_dmem_aruser === 0.U)
+
+      out.r.ready := core.io.io_axi_dmem_rready
+      core.io.io_axi_dmem_rvalid := out.r.valid
+      core.io.io_axi_dmem_rid := out.r.bits.id
+      core.io.io_axi_dmem_rdata := out.r.bits.data
+      core.io.io_axi_dmem_rresp := out.r.bits.resp
+      core.io.io_axi_dmem_rlast := out.r.bits.last
+      core.io.io_axi_dmem_ruser := 0.U // unused
   }
 }
