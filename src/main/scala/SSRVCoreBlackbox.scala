@@ -16,44 +16,7 @@ import chisel3.util._
 
 import scala.sys.process._
 
-class SSRVCoreIO extends Bundle {
-  // Control
-  val pwrup_rst_n = Input(Bool()) // Power-Up Reset
-  val rst_n = Input(Bool()) // Regular Reset signal
-  val cpu_rst_n = Input(Bool()) // CPU Reset (Core Reset)
-  val test_mode = Input(Bool()) // Test mode
-  val test_rst_n = Input(Bool()) // Test mode's reset
-  val clk = Input(Bool()) // System clock
-  val rtc_clk = Input(Bool()) // Real-time clock
-  // `ifdef SCR1_DBGC_EN
-  //     val ndm_rst_n_out = Output(Bool())           // Non-DM Reset from the Debug Module (DM)
-  // `endif // SCR1_DBGC_EN
-
-  // Fuses
-  val fuse_mhartid = Input(UInt(32.W)) // Hart ID
-  // `ifdef SCR1_DBGC_EN
-  //     val fuse_idcode = Input(UInt((31+1).W))             // TAPC IDCODE
-  // `endif // SCR1_DBGC_EN
-
-  // IRQ
-  // `ifdef SCR1_IPIC_EN
-  //     input   logic [SCR1_IRQ_LINES_NUM-1:0]          irq_lines,              // IRQ lines to IPIC
-  val irq_lines = Input(UInt(14.W)) // External IRQ input
-  // `else // SCR1_IPIC_EN
-  //     val ext_irq = Input(Bool())                 // External IRQ input
-  // `endif // SCR1_IPIC_EN
-  val soft_irq = Input(Bool()) // Software IRQ input
-
-  // `ifdef SCR1_DBGC_EN
-  //     // -- JTAG I/F
-  //     val trst_n = Input(Bool()) 
-  //     val tck = Input(Bool()) 
-  //     val tms = Input(Bool()) 
-  //     val tdi = Input(Bool()) 
-  //     val tdo = Output(Bool()) 
-  //     val tdo_en = Output(Bool()) 
-  // `endif // SCR1_DBGC_EN
-
+trait SSRVCoreIOIMem extends Bundle {
   // Instruction Memory Interface
   val io_axi_imem_awid = Output(UInt((3 + 1).W))
   val io_axi_imem_awaddr = Output(UInt((31 + 1).W))
@@ -99,7 +62,9 @@ class SSRVCoreIO extends Bundle {
   val io_axi_imem_ruser = Input(UInt((3 + 1).W))
   val io_axi_imem_rvalid = Input(Bool())
   val io_axi_imem_rready = Output(Bool())
+}
 
+trait SSRVCoreIODMem extends Bundle {
   // Data Memory Interface
   val io_axi_dmem_awid = Output(UInt((3 + 1).W))
   val io_axi_dmem_awaddr = Output(UInt((31 + 1).W))
@@ -146,6 +111,53 @@ class SSRVCoreIO extends Bundle {
   val io_axi_dmem_rvalid = Input(Bool())
   val io_axi_dmem_rready = Output(Bool())
 }
+
+trait SSRVCoreIOJtag extends Bundle {
+  // -- JTAG I/F
+  val trst_n = Input(Bool())
+  val tck = Input(Bool())
+  val tms = Input(Bool())
+  val tdi = Input(Bool())
+  val tdo = Output(Bool())
+  val tdo_en = Output(Bool())
+}
+
+trait SSRVCoreIOIRQWithIPIC extends Bundle {
+  val irq_lines = Input(UInt(14.W)) // External IRQ input
+}
+
+trait SSRVCoreIOIRQWithoutIPIC extends Bundle {
+  val ext_irq = Input(Bool()) // External IRQ input
+}
+
+trait SSRVCoreIOIRQ
+  extends Bundle
+  with SSRVCoreIOIRQWithIPIC {
+  val soft_irq = Input(Bool()) // Software IRQ input
+}
+
+trait SSRVCoreIODNGC extends Bundle with SSRVCoreIOJtag {
+  val ndm_rst_n_out = Output(Bool()) // Non-DM Reset from the Debug Module (DM)
+  val fuse_idcode = Input(UInt((31 + 1).W)) // TAPC IDCODE
+}
+
+trait SSRVCoreIOBase extends Bundle {
+  val pwrup_rst_n = Input(Bool()) // Power-Up Reset
+  val rst_n = Input(Bool()) // Regular Reset signal
+  val cpu_rst_n = Input(Bool()) // CPU Reset (Core Reset)
+  val test_mode = Input(Bool()) // Test mode
+  val test_rst_n = Input(Bool()) // Test mode's reset
+  val clk = Input(Clock()) // System clock
+  val rtc_clk = Input(Clock()) // Real-time clock
+
+  val fuse_mhartid = Input(UInt(32.W)) // Hart ID
+}
+
+class SSRVCoreIO extends Bundle
+  with SSRVCoreIOBase
+  with SSRVCoreIOIRQ
+  with SSRVCoreIOIMem
+  with SSRVCoreIODMem
 
 class SSRVCoreBlackbox
   extends BlackBox
