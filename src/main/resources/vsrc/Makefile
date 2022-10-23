@@ -7,6 +7,12 @@ ssrv_dir=$(vsrc_dir)/SuperScalar-RISCV-CPU/ssrv-on-scr1/fpga
 
 .PHONY: default
 default:
+	mkdir -p $(vsrc_dir)/ssrv/
+	cp -r $(ssrv_dir)/scr1 $(vsrc_dir)/ssrv/
+	cp -r $(ssrv_dir)/rtl $(vsrc_dir)/ssrv/
+
+.PHONY: default-some
+default-some:
 	mkdir -p $(vsrc_dir)/ssrv/scr1
 	cd $(ssrv_dir)/scr1 && cp --parent $(shell cat $(ssrv_dir)/scr1/core.files) $(vsrc_dir)/ssrv/scr1
 	cd $(ssrv_dir)/scr1 && cp --parent $(shell cat $(ssrv_dir)/scr1/axi_top.files) $(vsrc_dir)/ssrv/scr1
