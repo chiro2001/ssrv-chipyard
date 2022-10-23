@@ -3,7 +3,7 @@
 // All Rights Reserved. See LICENSE and LICENSE.SiFive for license details.
 //------------------------------------------------------------------------------
 
-package picorv
+package ssrv
 
 import chisel3._
 import chisel3.util.{log2Up}
