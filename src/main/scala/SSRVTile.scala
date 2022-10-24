@@ -165,27 +165,11 @@ class SSRVTile private(
   val beatBytes = masterPortBeatBytes
   val sourceBits = 1 // equiv. to userBits (i think)
 
-  // val memAXI4Nodes = AXI4MasterNode(
-  //   Seq(
-  //     AXI4MasterPortParameters(
-  //     masters = Seq(AXI4MasterParameters(
-  //       name = portName + "-imem",
-  //       id = IdRange(0, 1 << idBits)))),
-  //     AXI4MasterPortParameters(
-  //       masters = Seq(AXI4MasterParameters(
-  //         name = portName + "-dmem",
-  //         id = IdRange(0, 1 << idBits))))
-  //   ))
-
   val memAXI4Nodes = Seq(
     AXI4MasterNode(Seq(AXI4MasterPortParameters(
-      masters = Seq(AXI4MasterParameters(
-        name = portName + "-imem",
-        id = IdRange(0, 1 << idBits)))))),
+      masters = Seq(AXI4MasterParameters(portName + "-imem"))))),
     AXI4MasterNode(Seq(AXI4MasterPortParameters(
-      masters = Seq(AXI4MasterParameters(
-        name = portName + "-dmem",
-        id = IdRange(0, 1 << idBits))))))
+      masters = Seq(AXI4MasterParameters(portName + "-dmem")))))
   )
 
   val memoryTap = TLIdentityNode()
