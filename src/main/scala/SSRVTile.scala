@@ -69,7 +69,7 @@ case class SSRVCoreParams
   val lrscCycles: Int = 80 // copied from Rocket
   val decodeWidth: Int = 1 // TODO: Check
   val fetchWidth: Int = 1 // TODO: Check
-  val retireWidth: Int = 2
+  val retireWidth: Int = 1
   val nPTECacheEntries: Int = 8 // TODO: Check
 }
 
